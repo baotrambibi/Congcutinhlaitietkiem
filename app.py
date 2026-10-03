@@ -5,7 +5,7 @@ import pandas as pd
 # CẤU HÌNH TRANG
 # ============================================================
 st.set_page_config(
-    page_title="Smart Savings Calculator",
+    page_title="APP CÔNG CỤ TÍNH TIỀN GỞI TIẾT KIỆM CỦA BII",
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -49,7 +49,7 @@ st.markdown("""
         padding: 22px 24px;
         border: 1px solid #e8ebf0;
         box-shadow: 0 4px 15px rgba(20, 30, 50, 0.05);
-        height: 145px;
+        min-height: 145px;
     }
 
     .result-title {
@@ -244,6 +244,7 @@ if not tinh_lai:
         Hãy nhập thông tin khoản tiền gửi ở thanh bên trái,
         sau đó nhấn <b>“TÍNH TIỀN LÃI”</b> để xem kết quả.
         </p>
+
         <p style="color:#687386;">
         Bạn có thể lựa chọn giữa <b>lãi đơn</b> và
         <b>lãi kép</b>, đồng thời thay đổi hình thức nhận lãi
@@ -257,13 +258,22 @@ if not tinh_lai:
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        st.info("**Lãi đơn**\n\nTiền lãi được tính trên số tiền gốc ban đầu.")
+        st.info(
+            "**Lãi đơn**\n\n"
+            "Tiền lãi được tính trên số tiền gốc ban đầu."
+        )
 
     with c2:
-        st.info("**Lãi kép**\n\nTiền lãi được cộng vào gốc để tiếp tục sinh lãi.")
+        st.info(
+            "**Lãi kép**\n\n"
+            "Tiền lãi được cộng vào gốc để tiếp tục sinh lãi."
+        )
 
     with c3:
-        st.info("**3 hình thức nhận lãi**\n\nTheo tháng, theo quý hoặc cuối kỳ.")
+        st.info(
+            "**3 hình thức nhận lãi**\n\n"
+            "Theo tháng, theo quý hoặc cuối kỳ."
+        )
 
     st.stop()
 
@@ -314,6 +324,7 @@ bang_chi_tiet = []
 # ============================================================
 if loai_lai == "Lãi đơn":
 
+    # Tổng lãi trong toàn bộ kỳ hạn
     tong_lai = (
         tien_gui
         * lai_suat_nam
@@ -323,15 +334,7 @@ if loai_lai == "Lãi đơn":
 
     tong_tien = tien_gui + tong_lai
 
-    # Lãi định kỳ
-    lai_dinh_ky = (
-        tien_gui
-        * lai_suat_nam
-        * so_thang_moi_ky
-        / 12
-    )
-
-    # Tạo bảng
+    # Tạo bảng chi tiết
     thang_da_tinh = 0
     ky = 1
 
@@ -360,6 +363,9 @@ if loai_lai == "Lãi đơn":
 
         ky += 1
 
+    # Lãi của kỳ đầu tiên
+    lai_dinh_ky = bang_chi_tiet[0]["Tiền lãi"]
+
 
 # ============================================================
 # ===================== LÃI KÉP ==============================
@@ -374,6 +380,7 @@ else:
 
     elif hinh_thuc == "Lãnh lãi hàng quý":
 
+        # Số kỳ, kể cả kỳ cuối nếu kỳ hạn không chia hết cho 3
         so_ky = (ky_han + 2) // 3
         lai_suat_ky = lai_suat_nam / 4
         so_thang_moi_ky = 3
@@ -388,6 +395,8 @@ else:
 
     for ky in range(1, so_ky + 1):
 
+        # Trường hợp lãnh lãi hàng quý
+        # Xử lý cả kỳ cuối nếu kỳ hạn không đủ 3 tháng
         if hinh_thuc == "Lãnh lãi hàng quý":
 
             so_thang_thuc_te = min(
@@ -442,7 +451,6 @@ st.markdown(
 # RESULT CARDS
 # ============================================================
 c1, c2, c3 = st.columns(3)
-
 
 with c1:
 
@@ -537,6 +545,7 @@ st.markdown(
 
 chart_data = pd.DataFrame(bang_chi_tiet)
 
+# Cột số dư dùng cho biểu đồ
 chart_data["Số dư"] = chart_data["Tổng nhận"]
 
 chart_for_chart = chart_data[
@@ -559,8 +568,20 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-df_hien_thi = chart_data.copy()
+# ============================================================
+# QUAN TRỌNG:
+# chart_data hiện có 5 cột:
+# Kỳ | Tháng | Tiền lãi | Tổng nhận | Số dư
+#
+# Chỉ lấy 4 cột cần hiển thị trước khi đổi tên
+# để tránh lỗi ValueError.
+# ============================================================
 
+df_hien_thi = chart_data[
+    ["Kỳ", "Tháng", "Tiền lãi", "Tổng nhận"]
+].copy()
+
+# Định dạng tiền
 df_hien_thi["Tiền lãi"] = df_hien_thi[
     "Tiền lãi"
 ].apply(format_money)
@@ -569,6 +590,7 @@ df_hien_thi["Tổng nhận"] = df_hien_thi[
     "Tổng nhận"
 ].apply(format_money)
 
+# Đổi tên cột
 df_hien_thi.columns = [
     "Kỳ",
     "Tháng",
