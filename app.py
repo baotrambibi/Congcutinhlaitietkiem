@@ -5,7 +5,7 @@ import pandas as pd
 # CẤU HÌNH TRANG
 # ============================================================
 st.set_page_config(
-    page_title="APP CÔNG CỤ TÍNH TIỀN GỞI TIẾT KIỆM CỦA BII",
+    page_title="APP CÔNG CỤ TÍNH TIỀN GỞI TIẾT KIỆM CỦA BI",
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded"
