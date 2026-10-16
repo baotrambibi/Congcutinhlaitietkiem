@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 # 1. Cấu hình trang Streamlit
 st.set_page_config(
-    page_title="Hệ thống Dự báo Giá Cổ phiếu & Khuyến nghị Đầu tư",
+    page_title="Ứng Dụng Dự Đoán Giá Đóng Cửa Cổ Phiếu Bằng LSTM",
     page_icon="📈",
     layout="wide"
 )
@@ -27,9 +27,9 @@ def fix_seed(seed=42):
 
 fix_seed()
 
-# Giao diện Tiêu đề chính
-st.markdown("<h2 style='text-align: center; color: #1f77b4;'>📈 HỆ THỐNG DỰ BÁO GIÁ CỔ PHIẾU VÀ KHUYẾN NGHỊ THÔNG MINH</h2>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: gray;'>Ứng dụng mô hình học sâu LSTM kết hợp phân tích kỹ thuật xu hướng ngắn hạn</p>", unsafe_allow_html=True)
+# Giao diện Tiêu đề chính theo đúng tên yêu cầu
+st.markdown("<h2 style='text-align: center; color: #1f77b4;'>Ứng Dụng Dự Đoán Giá Đóng Cửa Cổ Phiếu Bằng LSTM</h2>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: gray;'>Hệ thống học sâu kết hợp phân tích xu hướng và khuyến nghị đầu tư thông minh</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # Sidebar cấu hình giao diện
@@ -38,7 +38,7 @@ ticker = st.sidebar.text_input("Nhập mã cổ phiếu (Ví dụ: VNM.VN, FPT.V
 start_date = st.sidebar.date_input("Ngày bắt đầu phân tích:", value=pd.to_datetime("2018-01-01"))
 end_date = st.sidebar.date_input("Ngày kết thúc phân tích:", value=pd.to_datetime("2026-10-14"))
 
-# Thanh trượt chọn số ngày dự báo tương lai (Khớp với giao diện mẫu của bạn)
+# Thanh trượt chọn số ngày dự báo tương lai
 forecast_days = st.sidebar.slider("Số ngày muốn dự đoán tương lai:", min_value=1, max_value=30, value=10)
 
 # Cấu hình nâng cao trong sidebar
@@ -57,7 +57,7 @@ if run_button:
             st.error("❌ Không tìm thấy dữ liệu cho mã cổ phiếu này hoặc khoảng thời gian không hợp lệ.")
             st.stop()
             
-        # Sửa lỗi kiểu dữ liệu: Chuyển hẳn thành mảng 1 chiều dạng float gốc để tránh lỗi TypeError khi trích xuất giá
+        # Xử lý an toàn dữ liệu Close để tránh mọi lỗi định dạng DataFrame/MultiIndex từ yfinance
         close_series = df['Close']
         if isinstance(close_series, pd.DataFrame):
             close_series = close_series.iloc[:, 0]
@@ -131,8 +131,8 @@ if run_button:
         col_m2.metric("📊 MAE (Sai số tuyệt đối trung bình)", f"{mae:,.2f}")
         col_m3.metric("🎯 R² Score (Độ phù hợp)", f"{r2:.4f}")
 
-        # Bảng thông tin tổng quát 10 phiên mới nhất (Khớp giao diện yêu cầu)
-        st.subheader(f"📋 Bảng thông tin tổng quát về giá cổ phiếu ({ticker})")
+        # Bảng thông tin tổng quát 10 phiên mới nhất
+        st.subheader(f"📋 Bảng thông tin tổng quát về giá cổ phiếu ({ticker}) (10 phiên mới nhất)")
         recent_df = df.tail(10).copy()
         recent_df.index = recent_df.index.strftime('%Y-%m-%d')
         st.dataframe(recent_df, use_container_width=True)
@@ -154,20 +154,19 @@ if run_button:
         future_predictions = np.array(future_predictions).reshape(-1, 1)
         future_predictions = scaler.inverse_transform(future_predictions)
 
-        # Tạo danh sách ngày tương lai (giả lập ngày giao dịch tiếp theo bỏ qua cuối tuần hoặc tăng dần đơn giản)
+        # Tạo danh sách ngày tương lai
         last_date = df.index[-1]
         future_dates = []
         curr = last_date
         for _ in range(forecast_days):
             curr += timedelta(days=1)
-            # Bỏ qua thứ 7 và chủ nhật nếu cần thiết, ở đây cộng dồn ngày đơn giản
-            while curr.weekday() >= 5: 
+            while curr.weekday() >= 5: # Bỏ qua thứ 7 và Chủ nhật
                 curr += timedelta(days=1)
             future_dates.append(curr.strftime('%Y-%m-%d'))
 
-        # 7. Sáng tạo: Đề xuất Đầu tư Tự động (Mua / Bán / Giữ)
-        current_price = float(data[-1])
-        predicted_mean = float(np.mean(future_predictions))
+        # 7. Sáng tạo: Đề xuất Đầu tư Tự động (Mua / Bán / Giữ) - Đã sửa lỗi ép kiểu an toàn tuyệt đối
+        current_price = float(data[-1].item())
+        predicted_mean = float(np.mean(future_predictions).item())
         price_change_pct = ((predicted_mean - current_price) / current_price) * 100
 
         st.markdown("---")
