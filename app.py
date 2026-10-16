@@ -10,10 +10,11 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 from tensorflow.keras.callbacks import EarlyStopping
+from datetime import datetime, timedelta
 
 # 1. Cấu hình trang Streamlit
 st.set_page_config(
-    page_title="Dự báo giá cổ phiếu VNM & Khuyến nghị Mua/Bán",
+    page_title="Hệ thống Dự báo Giá Cổ phiếu & Khuyến nghị Đầu tư",
     page_icon="📈",
     layout="wide"
 )
@@ -26,34 +27,42 @@ def fix_seed(seed=42):
 
 fix_seed()
 
-# Giao diện Tiêu đề
-st.title("📈 Ứng dụng Dự báo Giá Cổ phiếu VNM (LSTM) & Khuyến nghị Đầu tư")
-st.markdown("""
-Ứng dụng sử dụng mô hình học sâu **LSTM (Long Short-Term Memory)** để học dữ liệu lịch sử giá cổ phiếu **VNM** (Vinamilk), 
-đưa ra dự báo xu hướng trong tương lai và tích hợp phân tích kỹ thuật nhanh để đưa ra tín hiệu **Giữ/Bán/Mua**.
-""")
+# Giao diện Tiêu đề chính
+st.markdown("<h2 style='text-align: center; color: #1f77b4;'>📈 HỆ THỐNG DỰ BÁO GIÁ CỔ PHIẾU VÀ KHUYẾN NGHỊ THÔNG MINH</h2>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: gray;'>Ứng dụng mô hình học sâu LSTM kết hợp phân tích kỹ thuật xu hướng ngắn hạn</p>", unsafe_allow_html=True)
+st.markdown("---")
 
-# Sidebar cấu hình
-st.sidebar.header("⚙️ Cấu hình Mô hình")
-ticker = st.sidebar.text_input("Mã cổ phiếu", value="VNM.VN")
-start_date = st.sidebar.date_input("Ngày bắt đầu", value=pd.to_datetime("2018-01-01"))
-end_date = st.sidebar.date_input("Ngày kết thúc", value=pd.to_datetime("2026-10-14"))
-epochs = st.sidebar.slider("Số Epochs huấn luyện", min_value=1, max_value=20, value=5)
-batch_size = st.sidebar.selectbox("Batch Size", [16, 32, 64], index=1)
+# Sidebar cấu hình giao diện
+st.sidebar.markdown("### ⚙️ Cấu Hình Ứng Dụng")
+ticker = st.sidebar.text_input("Nhập mã cổ phiếu (Ví dụ: VNM.VN, FPT.VN, AAPL):", value="VNM.VN")
+start_date = st.sidebar.date_input("Ngày bắt đầu phân tích:", value=pd.to_datetime("2018-01-01"))
+end_date = st.sidebar.date_input("Ngày kết thúc phân tích:", value=pd.to_datetime("2026-10-14"))
 
-# Nút chạy mô hình
-run_button = st.sidebar.button("🚀 Huấn luyện & Dự báo")
+# Thanh trượt chọn số ngày dự báo tương lai (Khớp với giao diện mẫu của bạn)
+forecast_days = st.sidebar.slider("Số ngày muốn dự đoán tương lai:", min_value=1, max_value=30, value=10)
+
+# Cấu hình nâng cao trong sidebar
+with st.sidebar.expander("🔧 Cài đặt mô hình nâng cao"):
+    epochs = st.slider("Số Epochs huấn luyện", min_value=1, max_value=30, value=5)
+    batch_size = st.selectbox("Batch Size", [16, 32, 64], index=1)
+
+run_button = st.sidebar.button("🚀 Bắt đầu Phân tích & Dự đoán", type="primary")
 
 if run_button:
-    with st.spinner("Đang tải dữ liệu và huấn luyện mô hình LSTM... Vui lòng đợi trong giây lát!"):
+    with st.spinner("⏳ Đang tải dữ liệu từ Yahoo Finance và huấn luyện mô hình LSTM... Vui lòng đợi trong giây lát!"):
         
         # 3. Tải và xử lý dữ liệu
         df = yf.download(ticker, start=start_date, end=end_date)
         if df.empty or 'Close' not in df.columns:
-            st.error("Không tìm thấy dữ liệu cho mã cổ phiếu này hoặc khoảng thời gian không hợp lệ.")
+            st.error("❌ Không tìm thấy dữ liệu cho mã cổ phiếu này hoặc khoảng thời gian không hợp lệ.")
             st.stop()
             
-        data = df[['Close']].values
+        # Sửa lỗi kiểu dữ liệu: Chuyển hẳn thành mảng 1 chiều dạng float gốc để tránh lỗi TypeError khi trích xuất giá
+        close_series = df['Close']
+        if isinstance(close_series, pd.DataFrame):
+            close_series = close_series.iloc[:, 0]
+        data = close_series.values.astype(float).reshape(-1, 1)
+
         train_size = int(0.8 * len(data))
         train_data = data[:train_size]
         test_data = data[train_size:]
@@ -84,7 +93,7 @@ if run_button:
         X_train_final = X_train[:-val_size]
         y_train_final = y_train[:-val_size]
 
-        # 4. Xây dựng mô hình LSTM
+        # 4. Xây dựng và huấn luyện mô hình LSTM
         model = Sequential([
             LSTM(50, return_sequences=True, input_shape=(60, 1)),
             LSTM(50),
@@ -114,38 +123,26 @@ if run_button:
         mae = mean_absolute_error(y_test_real, test_pred)
         r2 = r2_score(y_test_real, test_pred)
 
-        # Hiển thị các chỉ số đánh giá
-        st.success("Huấn luyện mô hình hoàn tất!")
+        st.success("✅ Huấn luyện mô hình thành công!")
         
-        col1, col2, col3 = st.columns(3)
-        col1.metric("RMSE (Sai số căn bậc hai)", f"{rmse:.2f}")
-        col2.metric("MAE (Sai số tuyệt đối trung bình)", f"{mae:.2f}")
-        col3.metric("R² Score (Độ phù hợp)", f"{r2:.4f}")
+        # Hiển thị chỉ số đánh giá bằng Metrics đẹp mắt
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.metric("📉 RMSE (Sai số căn bậc hai)", f"{rmse:,.2f}")
+        col_m2.metric("📊 MAE (Sai số tuyệt đối trung bình)", f"{mae:,.2f}")
+        col_m3.metric("🎯 R² Score (Độ phù hợp)", f"{r2:.4f}")
 
-        # Vẽ biểu đồ Loss
-        st.subheader("📉 Quá trình huấn luyện (Loss Train vs Validation)")
-        fig_loss, ax_loss = plt.subplots(figsize=(10, 4))
-        ax_loss.plot(history.history['loss'], label='Train Loss', color='blue')
-        ax_loss.plot(history.history['val_loss'], label='Validation Loss', color='orange')
-        ax_loss.set_title("Loss qua các Epochs")
-        ax_loss.legend()
-        st.pyplot(fig_loss)
+        # Bảng thông tin tổng quát 10 phiên mới nhất (Khớp giao diện yêu cầu)
+        st.subheader(f"📋 Bảng thông tin tổng quát về giá cổ phiếu ({ticker})")
+        recent_df = df.tail(10).copy()
+        recent_df.index = recent_df.index.strftime('%Y-%m-%d')
+        st.dataframe(recent_df, use_container_width=True)
 
-        # Vẽ biểu đồ dự báo trên tập Test
-        st.subheader("📊 So sánh Giá thực tế và Giá dự báo trên tập Test")
-        fig_test, ax_test = plt.subplots(figsize=(12, 5))
-        ax_test.plot(y_test_real, label="Giá thật", color='green')
-        ax_test.plot(test_pred, label="Dự báo Test", color='red', linestyle='--')
-        ax_test.set_title("Kết quả dự báo tập kiểm thử")
-        ax_test.legend()
-        st.pyplot(fig_test)
-
-        # 6. Dự báo 10 ngày tới
+        # 6. Dự báo tương lai theo số ngày tùy chọn trên thanh trượt
         last_60_days = np.vstack((train_scaled, test_scaled))[-60:]
         last_60_days = last_60_days.reshape(1, 60, 1)
         future_predictions = []
         
-        for _ in range(10):
+        for _ in range(forecast_days):
             next_pred = model.predict(last_60_days)
             future_predictions.append(next_pred[0, 0])
             last_60_days = np.append(
@@ -157,46 +154,67 @@ if run_button:
         future_predictions = np.array(future_predictions).reshape(-1, 1)
         future_predictions = scaler.inverse_transform(future_predictions)
 
-        # 7. Sáng tạo thêm: Logic Khuyến nghị Giữ / Bán / Mua
-        current_price = float(data[-1]) # Giá phiên gần nhất
-        predicted_mean_10d = float(np.mean(future_predictions)) # Trung bình dự báo 10 ngày tới
-        price_change_pct = ((predicted_mean_10d - current_price) / current_price) * 100
+        # Tạo danh sách ngày tương lai (giả lập ngày giao dịch tiếp theo bỏ qua cuối tuần hoặc tăng dần đơn giản)
+        last_date = df.index[-1]
+        future_dates = []
+        curr = last_date
+        for _ in range(forecast_days):
+            curr += timedelta(days=1)
+            # Bỏ qua thứ 7 và chủ nhật nếu cần thiết, ở đây cộng dồn ngày đơn giản
+            while curr.weekday() >= 5: 
+                curr += timedelta(days=1)
+            future_dates.append(curr.strftime('%Y-%m-%d'))
+
+        # 7. Sáng tạo: Đề xuất Đầu tư Tự động (Mua / Bán / Giữ)
+        current_price = float(data[-1])
+        predicted_mean = float(np.mean(future_predictions))
+        price_change_pct = ((predicted_mean - current_price) / current_price) * 100
 
         st.markdown("---")
-        st.subheader("💡 Đề xuất Đầu tư Sáng tạo (Giữ / Bán / Mua)")
+        st.subheader("💡 Đề xuất Đầu tư Thông minh (Giữ / Bán / Mua)")
         
         col_rec1, col_rec2 = st.columns([1, 2])
-        
         with col_rec1:
-            st.metric("Giá hiện tại (Gần nhất)", f"{current_price:,.2f} VND")
-            st.metric("Trung bình dự báo 10 ngày tới", f"{predicted_mean_10d:,.2f} VND", f"{price_change_pct:+.2f}%")
+            st.metric("Giá hiện tại gần nhất", f"{current_price:,.2f} VND")
+            st.metric(f"Trung bình dự báo {forecast_days} ngày tới", f"{predicted_mean:,.2f} VND", f"{price_change_pct:+.2f}%")
 
         with col_rec2:
-            st.markdown("#### Khuyến nghị tự động từ hệ thống:")
-            if price_change_pct > 2.0:
-                st.success("🟢 **KHUYẾN NGHỊ: MUA / TÍCH LŨY**\n\nMô hình dự báo xu hướng tăng trưởng trong 10 ngày tới. Cơ hội tốt để xem xét gia tăng tỷ trọng.")
-            elif price_change_pct < -2.0:
-                st.error("🔴 **KHUYẾN NGHỊ: BÁN / CHỐT LỜI / CẮT LỖ**\n\nMô hình dự báo xu hướng giảm giá mạnh trong ngắn hạn. Cân nhắc hạ tỷ trọng để bảo vệ vốn.")
+            st.markdown("#### 📌 Nhận định hệ thống:")
+            if price_change_pct > 1.5:
+                st.success("🟢 **KHUYẾN NGHỊ: MUA / TÍCH LŨY (BUY)**\n\nXu hướng ngắn hạn dự kiến tăng trưởng tốt. Phù hợp để gia tăng tỷ trọng cổ phiếu.")
+            elif price_change_pct < -1.5:
+                st.error("🔴 **KHUYẾN NGHỊ: BÁN / CHỐT LỜI (SELL)**\n\nXu hướng ngắn hạn cho thấy áp lực điều chỉnh giảm. Cân nhắc hạ tỷ trọng quản trị rủi ro.")
             else:
-                st.warning("🟡 **KHUYẾN NGHỊ: GIỮ (HOLD)**\n\nThị trường dự kiến đi ngang hoặc biên độ biến động hẹp. Nên quan sát thêm các chỉ báo vĩ mô hoặc kỹ thuật khác.")
+                st.warning("🟡 **KHUYẾN NGHỊ: GIỮ / QUAN SÁT (HOLD)**\n\nBiến động giá đi ngang trong biên độ hẹp. Tiếp tục theo dõi thêm các tín hiệu kỹ thuật khác.")
 
-        # Biểu đồ tổng hợp (Giá thật + Dự báo test + 10 ngày tới)
-        st.subheader("🔮 Biểu đồ Dự báo 10 ngày tới")
-        fig_future, ax_future = plt.subplots(figsize=(12, 6))
-        ax_future.plot(y_test_real, label="Giá thật", color='green')
-        ax_future.plot(test_pred, label="Dự báo test", color='red', linestyle='--')
+        # 8. Hiển thị kết quả dự báo và biểu đồ trực quan
+        st.markdown("---")
+        st.subheader(f"🔮 Kết quả dự đoán giá đóng cửa trong {forecast_days} ngày tới")
         
-        future_x = range(len(y_test_real), len(y_test_real) + 10)
-        ax_future.plot(future_x, future_predictions, marker='o', label="10 ngày tới", color='purple')
-        ax_future.set_title("Dự báo xu hướng giá 10 ngày tiếp theo")
-        ax_future.legend()
-        st.pyplot(fig_future)
+        col_table, col_chart = st.columns([1, 1.5])
+        
+        with col_table:
+            st.markdown("**Bảng giá trị dự báo chi tiết:**")
+            df_future = pd.DataFrame({
+                "Ngày dự báo": future_dates,
+                "Giá dự đoán (VND)": [f"{val:,.2f}" for val in future_predictions.flatten()]
+            })
+            st.dataframe(df_future, use_container_width=True, hide_index=True)
 
-        # Hiển thị bảng giá trị dự báo 10 ngày
-        df_future = pd.DataFrame({
-            "Ngày thứ": [f"Ngày {i+1}" for i in range(10)],
-            "Giá dự báo (VND)": future_predictions.flatten()
-        })
-        st.table(df_future)
+        with col_chart:
+            fig_future, ax_future = plt.subplots(figsize=(10, 5))
+            ax_future.plot(y_test_real, label="Giá thực tế (Tập Test)", color='blue', linewidth=1.5)
+            ax_future.plot(test_pred, label="Giá mô hình đoán thử (Tập Test)", color='deepskyblue', linestyle='--', alpha=0.7)
+            
+            future_x = range(len(y_test_real), len(y_test_real) + forecast_days)
+            ax_future.plot(future_x, future_predictions, marker='o', color='red', linestyle='--', label=f"Dự báo tương lai ({forecast_days} ngày)")
+            
+            ax_future.set_title(f"Biểu đồ so sánh giá thật và kết quả dự báo cổ phiếu {ticker}")
+            ax_future.set_xlabel("Số phiên thời gian giao dịch")
+            ax_future.set_ylabel("Mức giá đóng cửa")
+            ax_future.legend(loc="upper left")
+            ax_future.grid(True, linestyle=':', alpha=0.5)
+            st.pyplot(fig_future)
+
 else:
-    st.info("👈 Vui lòng bấm nút **'Huấn luyện & Dự báo'** ở thanh bên trái để bắt đầu chạy mô hình.")
+    st.info("👈 Vui lòng cấu hình tham số ở thanh bên trái và bấm nút **'Bắt đầu Phân tích & Dự đoán'** để chạy ứng dụng.")
