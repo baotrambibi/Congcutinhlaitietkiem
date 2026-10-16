@@ -27,8 +27,8 @@ def fix_seed(seed=42):
 
 fix_seed()
 
-# Giao diện Tiêu đề chính theo đúng tên yêu cầu
-st.markdown("<h2 style='text-align: center; color: #1f77b4;'>Ứng Dụng Dự Đoán Giá Đóng Cửa Cổ Phiếu Bằng LSTM</h2>", unsafe_allow_html=True)
+# Giao diện Tiêu đề chính có thêm icon trang trí
+st.markdown("<h2 style='text-align: center; color: #1f77b4;'>📈 Ứng Dụng Dự Đoán Giá Đóng Cửa Cổ Phiếu Bằng LSTM 🤖</h2>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: gray;'>Hệ thống học sâu kết hợp phân tích xu hướng và khuyến nghị đầu tư thông minh</p>", unsafe_allow_html=True)
 st.markdown("---")
 
@@ -174,46 +174,4 @@ if run_button:
         
         col_rec1, col_rec2 = st.columns([1, 2])
         with col_rec1:
-            st.metric("Giá hiện tại gần nhất", f"{current_price:,.2f} VND")
-            st.metric(f"Trung bình dự báo {forecast_days} ngày tới", f"{predicted_mean:,.2f} VND", f"{price_change_pct:+.2f}%")
-
-        with col_rec2:
-            st.markdown("#### 📌 Nhận định hệ thống:")
-            if price_change_pct > 1.5:
-                st.success("🟢 **KHUYẾN NGHỊ: MUA / TÍCH LŨY (BUY)**\n\nXu hướng ngắn hạn dự kiến tăng trưởng tốt. Phù hợp để gia tăng tỷ trọng cổ phiếu.")
-            elif price_change_pct < -1.5:
-                st.error("🔴 **KHUYẾN NGHỊ: BÁN / CHỐT LỜI (SELL)**\n\nXu hướng ngắn hạn cho thấy áp lực điều chỉnh giảm. Cân nhắc hạ tỷ trọng quản trị rủi ro.")
-            else:
-                st.warning("🟡 **KHUYẾN NGHỊ: GIỮ / QUAN SÁT (HOLD)**\n\nBiến động giá đi ngang trong biên độ hẹp. Tiếp tục theo dõi thêm các tín hiệu kỹ thuật khác.")
-
-        # 8. Hiển thị kết quả dự báo và biểu đồ trực quan
-        st.markdown("---")
-        st.subheader(f"🔮 Kết quả dự đoán giá đóng cửa trong {forecast_days} ngày tới")
-        
-        col_table, col_chart = st.columns([1, 1.5])
-        
-        with col_table:
-            st.markdown("**Bảng giá trị dự báo chi tiết:**")
-            df_future = pd.DataFrame({
-                "Ngày dự báo": future_dates,
-                "Giá dự đoán (VND)": [f"{val:,.2f}" for val in future_predictions.flatten()]
-            })
-            st.dataframe(df_future, use_container_width=True, hide_index=True)
-
-        with col_chart:
-            fig_future, ax_future = plt.subplots(figsize=(10, 5))
-            ax_future.plot(y_test_real, label="Giá thực tế (Tập Test)", color='blue', linewidth=1.5)
-            ax_future.plot(test_pred, label="Giá mô hình đoán thử (Tập Test)", color='deepskyblue', linestyle='--', alpha=0.7)
-            
-            future_x = range(len(y_test_real), len(y_test_real) + forecast_days)
-            ax_future.plot(future_x, future_predictions, marker='o', color='red', linestyle='--', label=f"Dự báo tương lai ({forecast_days} ngày)")
-            
-            ax_future.set_title(f"Biểu đồ so sánh giá thật và kết quả dự báo cổ phiếu {ticker}")
-            ax_future.set_xlabel("Số phiên thời gian giao dịch")
-            ax_future.set_ylabel("Mức giá đóng cửa")
-            ax_future.legend(loc="upper left")
-            ax_future.grid(True, linestyle=':', alpha=0.5)
-            st.pyplot(fig_future)
-
-else:
-    st.info("👈 Vui lòng cấu hình tham số ở thanh bên trái và bấm nút **'Bắt đầu Phân tích & Dự đoán'** để chạy ứng dụng.")
+            st.metric("Giá hiện tại gần nhất", f"{current_price:,.2
