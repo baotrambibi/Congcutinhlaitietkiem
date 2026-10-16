@@ -1,681 +1,202 @@
 import streamlit as st
+import yfinance as yf
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+import tensorflow as tf
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.callbacks import EarlyStopping
 
-# =========================================================
-# CẤU HÌNH TRANG
-# =========================================================
-
+# 1. Cấu hình trang Streamlit
 st.set_page_config(
-    page_title="APP CÔNG CỤ TÍNH TIỀN GỞI TIẾT KIỆM_CỦA BI",
-    page_icon="💰",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Dự báo giá cổ phiếu VNM & Khuyến nghị Mua/Bán",
+    page_icon="📈",
+    layout="wide"
 )
 
-# =========================================================
-# CSS
-# =========================================================
+# 2. Cố định Random Seed để kết quả ổn định
+def fix_seed(seed=42):
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+    random.seed(seed)
 
+fix_seed()
+
+# Giao diện Tiêu đề
+st.title("📈 Ứng dụng Dự báo Giá Cổ phiếu VNM (LSTM) & Khuyến nghị Đầu tư")
 st.markdown("""
-<style>
-
-.stApp {
-    background-color: #f5f7fb;
-}
-
-section[data-testid="stSidebar"] {
-    background-color: white;
-    border-right: 1px solid #e5e7eb;
-}
-
-.main-title {
-    font-size: 34px;
-    font-weight: 800;
-    color: #172033;
-    margin-bottom: 5px;
-}
-
-.subtitle {
-    font-size: 16px;
-    color: #6b7280;
-    margin-bottom: 25px;
-}
-
-.section-title {
-    font-size: 24px;
-    font-weight: 800;
-    color: #172033;
-    margin-top: 30px;
-    margin-bottom: 15px;
-}
-
-.footer {
-    text-align: center;
-    color: #9ca3af;
-    font-size: 13px;
-    margin-top: 40px;
-    padding-bottom: 20px;
-}
-
-div[data-testid="stMetric"] {
-    background-color: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 16px;
-    padding: 15px;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-
-# =========================================================
-# HÀM ĐỊNH DẠNG TIỀN
-# =========================================================
-
-def format_money(value):
-    return f"{value:,.0f} VNĐ".replace(",", ".")
-
-
-# =========================================================
-# LOGO
-# =========================================================
-
-st.image("logo.jpg", width=180)
-
-
-# =========================================================
-# TIÊU ĐỀ
-# =========================================================
-
-st.markdown(
-    '<div class="main-title">'
-    '💰 APP CÔNG CỤ TÍNH TIỀN GỞI TIẾT KIỆM_CỦA BI'
-    '</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="subtitle">'
-    'Tra cứu lãi suất và tính tiền gửi tiết kiệm theo từng ngân hàng'
-    '</div>',
-    unsafe_allow_html=True
-)
-
-
-# =========================================================
-# DỮ LIỆU LÃI SUẤT
-# Đơn vị: %/năm
-# =========================================================
-
-lai_suat_data = {
-
-    "Bắc Á Bank": {
-        1: 4.75,
-        3: 4.75,
-        6: 7.05,
-        12: 7.10,
-        18: 6.95,
-        24: 6.95,
-        36: 6.95
-    },
-
-    "Saigonbank": {
-        1: 4.75,
-        3: 4.75,
-        6: 6.40,
-        12: 6.70,
-        18: 6.50,
-        24: 6.00,
-        36: 6.10
-    },
-
-    "PGBank": {
-        1: 4.75,
-        3: 4.75,
-        6: 6.60,
-        12: 6.70,
-        18: 6.80,
-        24: 6.80,
-        36: 6.80
-    },
-
-    "OCB": {
-        1: 4.75,
-        3: 4.75,
-        6: 6.40,
-        12: 6.70,
-        18: 6.60,
-        24: 6.80,
-        36: 7.00
-    },
-
-    "HDBank": {
-        1: 4.75,
-        3: 4.75,
-        6: 6.10,
-        12: 6.30,
-        18: 6.40,
-        24: 6.40,
-        36: 6.40
-    },
-
-    "VIB": {
-        1: 4.50,
-        3: 4.50,
-        6: 5.70,
-        12: 5.90,
-        18: 5.90,
-        24: 5.90,
-        36: 5.90
-    },
-
-    "MSB": {
-        1: 4.50,
-        3: 4.50,
-        6: 5.80,
-        12: 6.00,
-        18: 6.00,
-        24: 6.00,
-        36: 6.00
-    },
-
-    "Nam A Bank": {
-        1: 4.50,
-        3: 4.50,
-        6: 5.80,
-        12: 6.10,
-        18: 6.30,
-        24: 6.30,
-        36: 6.30
-    },
-
-    "Eximbank": {
-        1: 4.50,
-        3: 4.50,
-        6: 5.50,
-        12: 5.90,
-        18: 5.90,
-        24: 5.90,
-        36: 5.90
-    },
-
-    "VietABank": {
-        1: 4.50,
-        3: 4.50,
-        6: 6.00,
-        12: 6.20,
-        18: 6.40,
-        24: 6.40,
-        36: 6.40
-    },
-
-    "KienlongBank": {
-        1: 4.50,
-        3: 4.50,
-        6: 5.80,
-        12: 6.00,
-        18: 6.20,
-        24: 6.20,
-        36: 6.20
-    },
-
-    "NCB": {
-        1: 4.50,
-        3: 4.50,
-        6: 6.00,
-        12: 6.20,
-        18: 6.30,
-        24: 6.30,
-        36: 6.30
-    },
-
-    "ABBank": {
-        1: 4.50,
-        3: 4.50,
-        6: 5.70,
-        12: 5.90,
-        18: 5.90,
-        24: 5.90,
-        36: 5.90
-    },
-
-    "TPBank": {
-        1: 4.30,
-        3: 4.50,
-        6: 5.50,
-        12: 5.70,
-        18: 5.70,
-        24: 5.70,
-        36: 5.70
-    },
-
-    "LPBank": {
-        1: 4.20,
-        3: 4.50,
-        6: 5.40,
-        12: 5.60,
-        18: 5.60,
-        24: 5.60,
-        36: 5.60
-    },
-
-    "Sacombank": {
-        1: 4.20,
-        3: 4.50,
-        6: 5.40,
-        12: 5.60,
-        18: 5.60,
-        24: 5.60,
-        36: 5.60
-    },
-
-    "ACB": {
-        1: 4.10,
-        3: 4.30,
-        6: 5.30,
-        12: 5.50,
-        18: 5.50,
-        24: 5.50,
-        36: 5.50
-    },
-
-    "MB Bank": {
-        1: 4.00,
-        3: 4.20,
-        6: 5.10,
-        12: 5.30,
-        18: 5.30,
-        24: 5.30,
-        36: 5.30
-    },
-
-    "Techcombank": {
-        1: 3.95,
-        3: 4.15,
-        6: 4.95,
-        12: 5.15,
-        18: 5.15,
-        24: 5.15,
-        36: 5.15
-    },
-
-    "VPBank": {
-        1: 4.00,
-        3: 4.20,
-        6: 5.20,
-        12: 5.50,
-        18: 5.50,
-        24: 5.50,
-        36: 5.50
-    },
-
-    "SHB": {
-        1: 4.00,
-        3: 4.20,
-        6: 5.20,
-        12: 5.50,
-        18: 5.50,
-        24: 5.50,
-        36: 5.50
-    },
-
-    "SeABank": {
-        1: 4.00,
-        3: 4.20,
-        6: 5.20,
-        12: 5.40,
-        18: 5.40,
-        24: 5.40,
-        36: 5.40
-    },
-
-    "Vietcombank": {
-        1: 1.60,
-        3: 1.90,
-        6: 2.90,
-        12: 4.60,
-        18: 4.60,
-        24: 4.60,
-        36: 4.60
-    },
-
-    "BIDV": {
-        1: 1.70,
-        3: 2.00,
-        6: 3.00,
-        12: 4.70,
-        18: 4.70,
-        24: 4.70,
-        36: 4.70
-    },
-
-    "VietinBank": {
-        1: 1.70,
-        3: 2.00,
-        6: 3.00,
-        12: 4.70,
-        18: 4.70,
-        24: 4.70,
-        36: 4.70
-    },
-
-    "Agribank": {
-        1: 1.70,
-        3: 2.00,
-        6: 3.00,
-        12: 4.70,
-        18: 4.70,
-        24: 4.70,
-        36: 4.70
-    }
-}
-
-
-# =========================================================
-# BẢNG LÃI SUẤT
-# =========================================================
-
-st.markdown(
-    '<div class="section-title">📊 BẢNG LÃI SUẤT TIẾT KIỆM</div>',
-    unsafe_allow_html=True
-)
-
-st.caption("Đơn vị: %/năm")
-
-bang_lai_suat = pd.DataFrame.from_dict(
-    lai_suat_data,
-    orient="index"
-)
-
-bang_lai_suat = bang_lai_suat.rename(
-    columns={
-        1: "1 tháng",
-        3: "3 tháng",
-        6: "6 tháng",
-        12: "12 tháng",
-        18: "18 tháng",
-        24: "24 tháng",
-        36: "36 tháng"
-    }
-)
-
-bang_lai_suat.index.name = "Ngân hàng"
-
-st.dataframe(
-    bang_lai_suat,
-    use_container_width=True,
-    height=600
-)
-
-
-# =========================================================
-# ĐƯỜNG PHÂN CÁCH
-# =========================================================
-
-st.divider()
-
-
-# =========================================================
-# CÔNG CỤ TÍNH TIỀN GỞI
-# =========================================================
-
-st.markdown(
-    '<div class="section-title">🧮 CÔNG CỤ TÍNH TIỀN GỞI TIẾT KIỆM</div>',
-    unsafe_allow_html=True
-)
-
-st.write(
-    "Chọn ngân hàng và kỳ hạn. Hệ thống sẽ tự động lấy lãi suất tương ứng."
-)
-
-
-# =========================================================
-# NHẬP THÔNG TIN
-# =========================================================
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    ngan_hang = st.selectbox(
-        "🏦 Chọn ngân hàng",
-        list(lai_suat_data.keys())
-    )
-
-with col2:
-    ky_han = st.selectbox(
-        "📅 Chọn kỳ hạn",
-        [1, 3, 6, 12, 18, 24, 36],
-        format_func=lambda x: f"{x} tháng"
-    )
-
-with col3:
-    tien_gui = st.number_input(
-        "💵 Số tiền gửi (VNĐ)",
-        min_value=100000,
-        value=10000000,
-        step=1000000,
-        format="%d"
-    )
-
-
-# =========================================================
-# LẤY LÃI SUẤT TỰ ĐỘNG
-# =========================================================
-
-lai_suat = lai_suat_data[ngan_hang][ky_han]
-
-st.info(
-    f"🏦 **{ngan_hang}** | "
-    f"📅 Kỳ hạn: **{ky_han} tháng** | "
-    f"📈 Lãi suất: **{lai_suat:.2f}%/năm**"
-)
-
-
-# =========================================================
-# TÍNH LÃI
-# =========================================================
-
-so_nam = ky_han / 12
-
-# Lãi đơn
-tien_lai_don = tien_gui * (lai_suat / 100) * so_nam
-tong_tien_don = tien_gui + tien_lai_don
-
-# Lãi kép theo tháng
-lai_thang = lai_suat / 100 / 12
-so_thang = ky_han
-
-tong_tien_kep = tien_gui * ((1 + lai_thang) ** so_thang)
-tien_lai_kep = tong_tien_kep - tien_gui
-
-
-# =========================================================
-# KẾT QUẢ
-# =========================================================
-
-st.markdown(
-    '<div class="section-title">💰 KẾT QUẢ TÍNH TOÁN</div>',
-    unsafe_allow_html=True
-)
-
-r1, r2, r3 = st.columns(3)
-
-with r1:
-    st.metric(
-        "Tiền gốc",
-        format_money(tien_gui)
-    )
-
-with r2:
-    st.metric(
-        "Lãi đơn",
-        format_money(tien_lai_don)
-    )
-
-with r3:
-    st.metric(
-        "Tổng tiền - Lãi đơn",
-        format_money(tong_tien_don)
-    )
-
-
-r4, r5 = st.columns(2)
-
-with r4:
-    st.metric(
-        "Lãi kép theo tháng",
-        format_money(tien_lai_kep)
-    )
-
-with r5:
-    st.metric(
-        "Tổng tiền - Lãi kép",
-        format_money(tong_tien_kep)
-    )
-
-
-# =========================================================
-# BẢNG CHI TIẾT THEO THÁNG
-# =========================================================
-
-st.markdown(
-    '<div class="section-title">📋 BẢNG TĂNG TRƯỞNG TIỀN GỬI</div>',
-    unsafe_allow_html=True
-)
-
-thang_list = list(range(0, ky_han + 1))
-
-gia_tri_don = [
-    tien_gui * (1 + (lai_suat / 100) * (thang / 12))
-    for thang in thang_list
-]
-
-gia_tri_kep = [
-    tien_gui * ((1 + lai_thang) ** thang)
-    for thang in thang_list
-]
-
-chi_tiet = pd.DataFrame({
-    "Tháng": thang_list,
-    "Tiền gốc": [tien_gui] * len(thang_list),
-    "Giá trị - Lãi đơn": gia_tri_don,
-    "Giá trị - Lãi kép": gia_tri_kep
-})
-
-chi_tiet_hien_thi = chi_tiet.copy()
-
-chi_tiet_hien_thi["Tiền gốc"] = chi_tiet_hien_thi["Tiền gốc"].apply(format_money)
-chi_tiet_hien_thi["Giá trị - Lãi đơn"] = chi_tiet_hien_thi[
-    "Giá trị - Lãi đơn"
-].apply(format_money)
-
-chi_tiet_hien_thi["Giá trị - Lãi kép"] = chi_tiet_hien_thi[
-    "Giá trị - Lãi kép"
-].apply(format_money)
-
-st.dataframe(
-    chi_tiet_hien_thi,
-    use_container_width=True,
-    hide_index=True
-)
-
-
-# =========================================================
-# BIỂU ĐỒ
-# =========================================================
-
-st.markdown(
-    '<div class="section-title">📈 BIỂU ĐỒ TĂNG TRƯỞNG</div>',
-    unsafe_allow_html=True
-)
-
-chart_data = chi_tiet.set_index("Tháng")[
-    ["Giá trị - Lãi đơn", "Giá trị - Lãi kép"]
-]
-
-st.line_chart(chart_data)
-
-
-# =========================================================
-# CÔNG THỨC
-# =========================================================
-
-st.markdown(
-    '<div class="section-title">📐 CÔNG THỨC TÍNH</div>',
-    unsafe_allow_html=True
-)
-
-with st.expander("Xem công thức"):
-
-    st.markdown("### 1. Lãi đơn")
-
-    st.latex(
-        r"I = P \times r \times t"
-    )
-
-    st.write(
-        "Trong đó:"
-    )
-
-    st.write(
-        "- P: số tiền gốc"
-    )
-
-    st.write(
-        "- r: lãi suất năm"
-    )
-
-    st.write(
-        "- t: thời gian gửi tính theo năm"
-    )
-
-    st.markdown("### 2. Lãi kép theo tháng")
-
-    st.latex(
-        r"A = P\left(1+\frac{r}{12}\right)^n"
-    )
-
-    st.write(
-        "Trong đó:"
-    )
-
-    st.write(
-        "- A: số tiền nhận được"
-    )
-
-    st.write(
-        "- P: số tiền gốc"
-    )
-
-    st.write(
-        "- r: lãi suất năm"
-    )
-
-    st.write(
-        "- n: số tháng gửi"
-    )
-
-
-# =========================================================
-# LƯU Ý
-# =========================================================
-
-st.warning(
-    "⚠️ Lãi suất trong bảng mang tính tham khảo cho mục đích học tập. "
-    "Lãi suất thực tế có thể thay đổi theo thời điểm, số tiền gửi, "
-    "hình thức gửi và chính sách của từng ngân hàng."
-)
-
-
-# =========================================================
-# FOOTER
-# =========================================================
-
-st.markdown(
-    '<div class="footer">'
-    '💰 APP CÔNG CỤ TÍNH TIỀN GỞI TIẾT KIỆM_CỦA BI'
-    '<br>'
-    'Ứng dụng phục vụ mục đích học tập'
-    '</div>',
-    unsafe_allow_html=True
-)
+Ứng dụng sử dụng mô hình học sâu **LSTM (Long Short-Term Memory)** để học dữ liệu lịch sử giá cổ phiếu **VNM** (Vinamilk), 
+đưa ra dự báo xu hướng trong tương lai và tích hợp phân tích kỹ thuật nhanh để đưa ra tín hiệu **Giữ/Bán/Mua**.
+""")
+
+# Sidebar cấu hình
+st.sidebar.header("⚙️ Cấu hình Mô hình")
+ticker = st.sidebar.text_input("Mã cổ phiếu", value="VNM.VN")
+start_date = st.sidebar.date_input("Ngày bắt đầu", value=pd.to_datetime("2018-01-01"))
+end_date = st.sidebar.date_input("Ngày kết thúc", value=pd.to_datetime("2026-10-14"))
+epochs = st.sidebar.slider("Số Epochs huấn luyện", min_value=1, max_value=20, value=5)
+batch_size = st.sidebar.selectbox("Batch Size", [16, 32, 64], index=1)
+
+# Nút chạy mô hình
+run_button = st.sidebar.button("🚀 Huấn luyện & Dự báo")
+
+if run_button:
+    with st.spinner("Đang tải dữ liệu và huấn luyện mô hình LSTM... Vui lòng đợi trong giây lát!"):
+        
+        # 3. Tải và xử lý dữ liệu
+        df = yf.download(ticker, start=start_date, end=end_date)
+        if df.empty or 'Close' not in df.columns:
+            st.error("Không tìm thấy dữ liệu cho mã cổ phiếu này hoặc khoảng thời gian không hợp lệ.")
+            st.stop()
+            
+        data = df[['Close']].values
+        train_size = int(0.8 * len(data))
+        train_data = data[:train_size]
+        test_data = data[train_size:]
+
+        # Chuẩn hóa dữ liệu
+        scaler = MinMaxScaler()
+        train_scaled = scaler.fit_transform(train_data)
+        test_scaled = scaler.transform(test_data)
+
+        def create_sequences(seq_data, window_size=60):
+            X, y = [], []
+            for i in range(window_size, len(seq_data)):
+                X.append(seq_data[i-window_size:i])
+                y.append(seq_data[i])
+            return np.array(X), np.array(y)
+
+        X_train, y_train = create_sequences(train_scaled)
+        test_combined = np.vstack((train_scaled[-60:], test_scaled))
+        X_test, y_test = create_sequences(test_combined)
+
+        X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
+        X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
+
+        # Tập Validation
+        val_size = int(0.1 * len(X_train))
+        X_val = X_train[-val_size:]
+        y_val = y_train[-val_size:]
+        X_train_final = X_train[:-val_size]
+        y_train_final = y_train[:-val_size]
+
+        # 4. Xây dựng mô hình LSTM
+        model = Sequential([
+            LSTM(50, return_sequences=True, input_shape=(60, 1)),
+            LSTM(50),
+            Dense(1)
+        ])
+        model.compile(optimizer='adam', loss='mean_squared_error')
+
+        early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+
+        history = model.fit(
+            X_train_final, y_train_final,
+            validation_data=(X_val, y_val),
+            epochs=epochs,
+            batch_size=batch_size,
+            shuffle=False,
+            callbacks=[early_stop],
+            verbose=0
+        )
+
+        # 5. Dự báo trên tập Test
+        test_pred = model.predict(X_test)
+        test_pred = scaler.inverse_transform(test_pred)
+        y_test_real = scaler.inverse_transform(y_test.reshape(-1, 1))
+
+        # Đánh giá mô hình
+        rmse = np.sqrt(mean_squared_error(y_test_real, test_pred))
+        mae = mean_absolute_error(y_test_real, test_pred)
+        r2 = r2_score(y_test_real, test_pred)
+
+        # Hiển thị các chỉ số đánh giá
+        st.success("Huấn luyện mô hình hoàn tất!")
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("RMSE (Sai số căn bậc hai)", f"{rmse:.2f}")
+        col2.metric("MAE (Sai số tuyệt đối trung bình)", f"{mae:.2f}")
+        col3.metric("R² Score (Độ phù hợp)", f"{r2:.4f}")
+
+        # Vẽ biểu đồ Loss
+        st.subheader("📉 Quá trình huấn luyện (Loss Train vs Validation)")
+        fig_loss, ax_loss = plt.subplots(figsize=(10, 4))
+        ax_loss.plot(history.history['loss'], label='Train Loss', color='blue')
+        ax_loss.plot(history.history['val_loss'], label='Validation Loss', color='orange')
+        ax_loss.set_title("Loss qua các Epochs")
+        ax_loss.legend()
+        st.pyplot(fig_loss)
+
+        # Vẽ biểu đồ dự báo trên tập Test
+        st.subheader("📊 So sánh Giá thực tế và Giá dự báo trên tập Test")
+        fig_test, ax_test = plt.subplots(figsize=(12, 5))
+        ax_test.plot(y_test_real, label="Giá thật", color='green')
+        ax_test.plot(test_pred, label="Dự báo Test", color='red', linestyle='--')
+        ax_test.set_title("Kết quả dự báo tập kiểm thử")
+        ax_test.legend()
+        st.pyplot(fig_test)
+
+        # 6. Dự báo 10 ngày tới
+        last_60_days = np.vstack((train_scaled, test_scaled))[-60:]
+        last_60_days = last_60_days.reshape(1, 60, 1)
+        future_predictions = []
+        
+        for _ in range(10):
+            next_pred = model.predict(last_60_days)
+            future_predictions.append(next_pred[0, 0])
+            last_60_days = np.append(
+                last_60_days[:, 1:, :],
+                next_pred.reshape(1, 1, 1),
+                axis=1
+            )
+            
+        future_predictions = np.array(future_predictions).reshape(-1, 1)
+        future_predictions = scaler.inverse_transform(future_predictions)
+
+        # 7. Sáng tạo thêm: Logic Khuyến nghị Giữ / Bán / Mua
+        current_price = float(data[-1]) # Giá phiên gần nhất
+        predicted_mean_10d = float(np.mean(future_predictions)) # Trung bình dự báo 10 ngày tới
+        price_change_pct = ((predicted_mean_10d - current_price) / current_price) * 100
+
+        st.markdown("---")
+        st.subheader("💡 Đề xuất Đầu tư Sáng tạo (Giữ / Bán / Mua)")
+        
+        col_rec1, col_rec2 = st.columns([1, 2])
+        
+        with col_rec1:
+            st.metric("Giá hiện tại (Gần nhất)", f"{current_price:,.2f} VND")
+            st.metric("Trung bình dự báo 10 ngày tới", f"{predicted_mean_10d:,.2f} VND", f"{price_change_pct:+.2f}%")
+
+        with col_rec2:
+            st.markdown("#### Khuyến nghị tự động từ hệ thống:")
+            if price_change_pct > 2.0:
+                st.success("🟢 **KHUYẾN NGHỊ: MUA / TÍCH LŨY**\n\nMô hình dự báo xu hướng tăng trưởng trong 10 ngày tới. Cơ hội tốt để xem xét gia tăng tỷ trọng.")
+            elif price_change_pct < -2.0:
+                st.error("🔴 **KHUYẾN NGHỊ: BÁN / CHỐT LỜI / CẮT LỖ**\n\nMô hình dự báo xu hướng giảm giá mạnh trong ngắn hạn. Cân nhắc hạ tỷ trọng để bảo vệ vốn.")
+            else:
+                st.warning("🟡 **KHUYẾN NGHỊ: GIỮ (HOLD)**\n\nThị trường dự kiến đi ngang hoặc biên độ biến động hẹp. Nên quan sát thêm các chỉ báo vĩ mô hoặc kỹ thuật khác.")
+
+        # Biểu đồ tổng hợp (Giá thật + Dự báo test + 10 ngày tới)
+        st.subheader("🔮 Biểu đồ Dự báo 10 ngày tới")
+        fig_future, ax_future = plt.subplots(figsize=(12, 6))
+        ax_future.plot(y_test_real, label="Giá thật", color='green')
+        ax_future.plot(test_pred, label="Dự báo test", color='red', linestyle='--')
+        
+        future_x = range(len(y_test_real), len(y_test_real) + 10)
+        ax_future.plot(future_x, future_predictions, marker='o', label="10 ngày tới", color='purple')
+        ax_future.set_title("Dự báo xu hướng giá 10 ngày tiếp theo")
+        ax_future.legend()
+        st.pyplot(fig_future)
+
+        # Hiển thị bảng giá trị dự báo 10 ngày
+        df_future = pd.DataFrame({
+            "Ngày thứ": [f"Ngày {i+1}" for i in range(10)],
+            "Giá dự báo (VND)": future_predictions.flatten()
+        })
+        st.table(df_future)
+else:
+    st.info("👈 Vui lòng bấm nút **'Huấn luyện & Dự báo'** ở thanh bên trái để bắt đầu chạy mô hình.")
