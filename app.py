@@ -27,7 +27,7 @@ def fix_seed(seed=42):
 
 fix_seed()
 
-# Giao diện Tiêu đề chính có thêm icon trang trí
+# Giao diện Tiêu đề chính có icon trang trí
 st.markdown("<h2 style='text-align: center; color: #1f77b4;'>📈 Ứng Dụng Dự Đoán Giá Đóng Cửa Cổ Phiếu Bằng LSTM 🤖</h2>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: gray;'>Hệ thống học sâu kết hợp phân tích xu hướng và khuyến nghị đầu tư thông minh</p>", unsafe_allow_html=True)
 st.markdown("---")
@@ -155,23 +155,4 @@ if run_button:
         future_predictions = scaler.inverse_transform(future_predictions)
 
         # Tạo danh sách ngày tương lai
-        last_date = df.index[-1]
-        future_dates = []
-        curr = last_date
-        for _ in range(forecast_days):
-            curr += timedelta(days=1)
-            while curr.weekday() >= 5: # Bỏ qua thứ 7 và Chủ nhật
-                curr += timedelta(days=1)
-            future_dates.append(curr.strftime('%Y-%m-%d'))
-
-        # 7. Sáng tạo: Đề xuất Đầu tư Tự động (Mua / Bán / Giữ) - Đã sửa lỗi ép kiểu an toàn tuyệt đối
-        current_price = float(data[-1].item())
-        predicted_mean = float(np.mean(future_predictions).item())
-        price_change_pct = ((predicted_mean - current_price) / current_price) * 100
-
-        st.markdown("---")
-        st.subheader("💡 Đề xuất Đầu tư Thông minh (Giữ / Bán / Mua)")
-        
-        col_rec1, col_rec2 = st.columns([1, 2])
-        with col_rec1:
-            st.metric("Giá hiện tại gần nhất", f"{current_price:,.2
+        last_date = df.
